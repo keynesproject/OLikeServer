@@ -1,4 +1,3 @@
-
 #include "kE5Server.h"
 
 #ifdef _DEBUG
@@ -50,9 +49,11 @@ int main( int argc, char *argv[] )
         OLikeServer->Run();
     }
 
+#ifdef PTW32_STATIC_LIB 
     pthread_win32_thread_detach_np();
 
     pthread_win32_process_detach_np();
+#endif 
 
     return 0;
 }

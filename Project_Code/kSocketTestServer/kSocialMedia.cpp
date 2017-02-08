@@ -53,8 +53,8 @@ bool ksmFaceBook::Initial()
 
 bool ksmFaceBook::Close() 
 {
-    if(m_Curl)
-        curl_easy_cleanup(m_Curl);
+    //if(m_Curl)
+    //    curl_easy_cleanup(m_Curl);
 
     return true;
 }

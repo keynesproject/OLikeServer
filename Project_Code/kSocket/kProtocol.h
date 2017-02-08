@@ -14,11 +14,16 @@
 #define PROTOCOL_C_REPLY      (char)0x10  //Client回復Server資訊   ，資料結構參照P_Reply;//
 #define PROTOCOL_C_CONNECT    (char)0x11  //Client連線請求的資訊    ，資料結構參照P_C_Request;//
 
+#define PROTOCOL_SYNC1  (char)0X4F
+#define PROTOCOL_SYNC2  (char)0X50
+#define PROTOCOL_SYNC3  (char)0X45
+
 //回應另一端失敗或成功的類型;//
 enum ProtocolTypeReply
 {
     eREPLY_CHECK_ALIVE = 0,
     eREPLY_CONNECT,
+    eREPLY_REQUEST_DATA,
     eREPLY_RESPONSE,
 };
 

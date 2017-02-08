@@ -164,7 +164,7 @@ bool kSocket::SetActive( bool IsActive )
             m_isCloseThread = true;
 
             void *Status = NULL;
-            int Rc = pthread_join( m_Thread, &Status );
+            pthread_join( m_Thread, &Status );
             if ( Status != PTHREAD_CANCELED )
                 return false;
 

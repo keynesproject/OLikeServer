@@ -200,9 +200,9 @@ int ServerContext::Send( char Protocol, char *Data )
         return eERR_PROTOCOL;
 
     //加上 Sync 碼;//
-    SendData->SyncCode[0] = 0X4F;
-    SendData->SyncCode[1] = 0X50;
-    SendData->SyncCode[2] = 0X45;
+    SendData->SyncCode[0] = PROTOCOL_SYNC1;
+    SendData->SyncCode[1] = PROTOCOL_SYNC2;
+    SendData->SyncCode[2] = PROTOCOL_SYNC3;
 
     //設定Protocol;//
     SendData->Protocol = Protocol;
@@ -248,7 +248,9 @@ const char *GetStateString( int State )
 
 static const string ReplyString[] =
 {
+    "eREPLY_CHECK_ALIVE"
     "eREPLY_CONNECT",
+    "eREPLY_REQUEST_DATA",
     "eREPLY_RESPONSE",
 };
 
@@ -266,7 +268,15 @@ void ServerContext::ReplyClient( ProtocolTypeReply Type, bool IsSucess )
 
     this->Send( PROTOCOL_S_REPLY, (char *)&Reply );
 
-    printf( "[ Reply ] Client:%d Type:%s IsSucess:%d\n", m_Client, GetReplyType(Type), IsSucess );
+    this->ShowReplyMsg( false, Type, IsSucess);
+}
+
+void ServerContext::ShowReplyMsg( bool isGet, ProtocolTypeReply Type, bool IsSucess)
+{
+    if(isGet)
+        printf("[ Reply From ] Client:%d Type:%s IsSucess:%d\n", m_Client, GetReplyType(Type), IsSucess);
+    else
+        printf("[ Reply To ] Client:%d Type:%s IsSucess:%d\n", m_Client, GetReplyType(Type), IsSucess);
 }
 
 void ServerContext::SetState( ServerState State )
@@ -414,7 +424,7 @@ void ServerContext::ResponseClientData()
     char Temp[7];
     memcpy(Temp, Response.Number, 6);
     Temp[6] = 0;
-    printf("[ RESPONSE ] Client:%d Number:%s \n", m_Client, Temp);
+    printf("[ Response ] To Client:%d Number:%s \n", m_Client, Temp);
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -490,34 +500,64 @@ StateResponse::~StateResponse()
 }
 
 int StateResponse::Execute()
-{
-    //定時向指定的社群請求資料並解析出指定的欄位;//
-    if (clock() - m_ClkStart > 5000)
-    {
-        m_Contex->ResponseClientData();
-        m_ClkStart = clock();
-    }
+{    
+    //定時向指定的社群請求資料並解析出指定的欄位(修改為Client有請求才寄送資料);//
+    //if (clock() - m_ClkStart > 5000)
+    //{
+    //    m_Contex->ResponseClientData();
+    //    m_ClkStart = clock();
+    //}
 
     return eERR_NONE;
 }
 
 int StateResponse::Receive(char Protocol, char *Data)
-{
-    //表示Client變更請求項目;//
-    if (Protocol = PROTOCOL_C_CONNECT)
+{    
+    switch (Protocol)
     {
-        //P_C_Request *ProtocolRequest = (P_C_Request*)Data;
-        P_C_Request Request;
-        memcpy(&Request, Data, sizeof(P_C_Request));
+        //表示Client變更請求項目;//
+        case PROTOCOL_C_CONNECT:
+        {        
+            P_C_Request Request;
+            memcpy(&Request, Data, sizeof(P_C_Request));
 
-        if (!m_Contex->SetClientRequest(&Request))
-        {
-            m_Contex->ReplyClient(eREPLY_CONNECT, false);
-            return eERR_CLIENT_CONNECT_TYPE;
+            if (!m_Contex->SetClientRequest(&Request))
+            {
+                m_Contex->ReplyClient(eREPLY_CONNECT, false);
+                return eERR_CLIENT_CONNECT_TYPE;
+            }
+
+            m_Contex->ReplyClient(eREPLY_CONNECT, true);
         }
-    }
+            break;
+        
+        //表示Client有回覆項目或請求;//
+        case PROTOCOL_C_REPLY:
+        {
+            P_Reply Reply;
+            memcpy(&Reply, Data, sizeof(P_Reply));
 
-    m_Contex->ReplyClient(eREPLY_CONNECT, true);
+            //顯示訊息;//
+            m_Contex->ShowReplyMsg( true, (ProtocolTypeReply)Reply.TypeReply, Reply.IsSucess);
+
+            //表示有資料請求,回覆對應的社群網站資料;//
+            if (Reply.TypeReply == eREPLY_REQUEST_DATA
+                && Reply.IsSucess)
+            {
+                //傳送請求資料給Client;//
+                m_Contex->ResponseClientData();
+            }
+            else if(Reply.TypeReply == eREPLY_RESPONSE)
+            {
+                //表示收到資料解析成功;//
+                //目前不做任何動作;//
+            }
+        }
+            break;
+
+        default:
+            break;
+    }
 
     return eERR_NONE;
 }

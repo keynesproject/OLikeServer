@@ -63,6 +63,7 @@ public:
     int  Send( char Protocol, char *Data );
     
     void ReplyClient( ProtocolTypeReply Type, bool IsSucess );
+    void ShowReplyMsg( bool isGet, ProtocolTypeReply Type, bool IsSucess );
 
     void SetState( ServerState State );    
     void UndoState();
@@ -134,7 +135,7 @@ public:
     int Execute() override;
 
     int Receive(char Protocol, char *Data) override;
-
+    
 private:
     clock_t m_ClkStart; //開始的時間;//    
 };

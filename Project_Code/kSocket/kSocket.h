@@ -1,16 +1,14 @@
 #ifndef __K_SOCKET_H__
 #define __K_SOCKET_H__
 
-#include <string>
 #include <stdio.h>
 #include <map>
 #include "kProtocol.h"
 #include "pthread.h"
 #include "kCRC.h"
 
-
 #ifdef WIN32
-
+#include <string>
 #include <typeinfo>
 #include <winsock2.h>
 #include <WS2tcpip.h>
@@ -18,7 +16,7 @@
 #include <Windows.h> 
 
 #else //#ifdef WIN32
-
+#include <string.h>
 #include <unistd.h>
 #include <iostream>
 #include <sys/socket.h>
@@ -30,7 +28,7 @@
 #include <pthread.h>
 #include "fcntl.h"
 #include "sys/ioctl.h"
-#include "time.h"
+#include <sys/time.h>
 #include "sys/timeb.h"
 
 #define SOCKET unsigned int
