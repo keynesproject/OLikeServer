@@ -46,8 +46,7 @@ CXX      = arm-linux-g++
 CXXFLAGS = -std=c++0x -Wall -O2
 
 ############################ command
-all: $(PRO_TARGET_CLIENT) $(PRO_TARGET_SERVER)
-
+all: $(PROSERVER_OUT_DIR) $(PRO_TARGET_CLIENT) $(PRO_TARGET_SERVER)
 
 #$(PRO_TARGET_CLIENT): $(CLIENT_OBJS)
 #       @echo -e "\033[036mCompiling $@\033[0m"
@@ -57,6 +56,9 @@ $(PRO_TARGET_SERVER): $(SERVER_OBJS)
         @echo -e "\033[036mCompiling $@\033[0m"
         $(CXX) -o $(PROSERVER_OUT_DIR)/$@  $(CXXFLAGS) $(SERVER_OBJS) $(LIBS) $(LIBPATH)
 
+$(PROSERVER_OUT_DIR):
+        mkdir -p $(PROSERVER_OUT_DIR)
+        
 %.o : %.cpp
         @echo -e "\033[036mCompiling CXX $@\033[0m"
         $(CXX) -c $(CXXFLAGS) $(INCPATH) -o $@ $<
