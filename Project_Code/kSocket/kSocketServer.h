@@ -1,7 +1,7 @@
 #ifndef __K_SOCKET_SERVER_H__
 #define __K_SOCKET_SERVER_H__
 
-#include <list>
+#include <vector>
 #include "kSocket.h"
 
 
@@ -33,14 +33,20 @@ private:
 
     bool AddNewClient( SOCKET Server );           //處理Accept的動作;//
 
-    ProtocolHeadStruct *Analyse( SOCKET FromSocket, char *Data );    //解析從Socket收到的資料;//
+    void RemoveClient( SOCKET Clinet );
 
 private:
     fd_set      m_SelectFds;                      //使用非阻塞Select方式監測的Socket集合;//
     timeval     m_SelectTime;                     //select輪詢時間，要非阻塞就設0;//
     SOCKET      m_SocketServer;                   //Server本身使用的Socket;//
     sockaddr_in m_ServAddr;                       //Server資訊;//
-    std::map< SOCKET, sockaddr_in > m_Clients;    //連線的Client端資訊;//
+    struct ClientInfo
+    {
+        SOCKET        Socket;
+        sockaddr_in   Addr;
+        unsigned long TimeOut;
+    };
+    std::vector< ClientInfo > m_vClients;
 
     void *m_ConnectWorkingClass;
     CONNECT_CALLBACK_FUNC m_ConnectCallbackFunc;

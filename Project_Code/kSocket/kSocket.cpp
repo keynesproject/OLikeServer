@@ -2,6 +2,17 @@
 #include "kSocketServer.h"
 #include "kSocketClient.h"
 
+#ifndef WIN32
+unsigned long GetTickCount()
+{
+    struct timespec ts;
+
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+
+    return (ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
+}
+#endif // !WIN32
+
 /////////////////////////////////////////////////////////////////////////////
 // Socket 的 Select 功能由thread去跑
 /////////////////////////////////////////////////////////////////////////////
@@ -157,7 +168,11 @@ bool kSocket::SetActive( bool IsActive )
     else
     {
         //關閉thread;//
+#ifdef WIN32
         if( m_Thread.p != NULL )
+#else
+        if(m_Thread != 0 )
+#endif // WIN32
         {
             pthread_cancel( m_Thread );
 
@@ -201,20 +216,6 @@ bool kSocket::SetNonBlocking( SOCKET &Socket )
     if( fcntl( Socket, F_SETFL, O_NONBLOCK ) < 0 )
         return false;
 #endif
-
-    return true;
-}
-
-bool kSocket::IoctlCheck( SOCKET Sock, long Cmd, unsigned long *ArgP )
-{
-#ifdef WIN32                           
-    if( ioctlsocket( Sock, Cmd, ArgP ) == SOCKET_ERROR )
-#else
-    if( ioctl( Sock, Cmd, ArgP ) == -1 )
-#endif
-    {
-        return false;
-    }
 
     return true;
 }
@@ -323,28 +324,6 @@ int kSocket::GetProtocolStructSize( char Protocol )
         return sizeof(P_S_Response);
     }
 
-    return 0;
-
-    /*
-    switch( Protocol )
-    {
-    case PROTOCOL_S_UPDATE_INFO:
-        return sizeof( ProtocolUpdateInfo );
-
-    case PROTOCOL_S_SEND_UPDATE_DATA:
-        return sizeof( ProtocolUpdateData );
-
-    case PROTOCOL_S_REPLY:
-    case PROTOCOL_C_REPLY:
-        return sizeof( ProtocolReply );
-
-    case PROTOCOL_C_LOGGING:
-        return sizeof( ProtocolLogging );
-
-    case PROTOCOL_C_REQUST_UPDATE:
-        return sizeof( ProtocolRequestUpdate );
-    }
-    */
     return 0;
 }
 

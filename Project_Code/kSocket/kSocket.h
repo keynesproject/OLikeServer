@@ -35,6 +35,11 @@
 
 #endif //#ifdef WIN32
 
+#ifndef WIN32
+unsigned long GetTickCount();
+#endif // !WIN32
+
+
 //Client端定時會傳送這筆字串給Server，防止TimeOut;//
 #define KSOCKET_HANDSHAKE_CODE "kSocketHandShark"
 class kSocket;
@@ -135,8 +140,6 @@ protected:
     virtual void CloseAll() = 0;            //關閉清除所有連線的Socket;//
 
     bool SetNonBlocking( SOCKET &Socket );
-
-    bool IoctlCheck( SOCKET Sock, long Cmd, unsigned long *ArgP );
 
     const char* GetLocalIp(); 
     

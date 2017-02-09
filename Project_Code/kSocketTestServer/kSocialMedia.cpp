@@ -1,6 +1,5 @@
 #include "kSocialMedia.h"
 #include "rapidjson/document.h"
-#include <sstream>
 
 using namespace rapidjson;
 

@@ -103,9 +103,16 @@ int kClient::Select()
             if( FD_ISSET( m_Client, &m_FdRead) )
             {
                 char *Buffer;
-                unsigned long RecvDataSize = 0;
-                if( IoctlCheck( m_Client, FIONREAD, &RecvDataSize ) == false )
-                    break;
+
+#ifdef WIN32
+                unsigned long RecvDataSize;
+                if (ioctlsocket(m_Client, FIONREAD, &RecvDataSize) == SOCKET_ERROR)
+                    return eERR_SERVER_RECEIVE;
+#else
+                unsigned long RecvDataSize;
+                if (ioctl(m_Client, FIONREAD, &RecvDataSize) < 0)
+                    return eERR_SERVER_RECEIVE;
+#endif
 
                 if( RecvDataSize == 0 )
                     break;
@@ -196,10 +203,10 @@ void kClient::TimeToSendHandShake()
     //計時倒數;//
     unsigned long EndTime = GetTickCount();
 
-    if ( EndTime - m_HandShakeTime > 20000)
+    if ( EndTime - m_HandShakeTime > 20000 )
     {
         m_HandShakeTime = EndTime;
         // 加入要執行的函式
-        this->Send( KSOCKET_HANDSHAKE_CODE, strlen(KSOCKET_HANDSHAKE_CODE) );
+        this->Send( (char*)KSOCKET_HANDSHAKE_CODE, strlen(KSOCKET_HANDSHAKE_CODE) );
     }
 }

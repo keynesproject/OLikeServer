@@ -33,7 +33,7 @@ int kServer::Create( SocketInfo Info )
     m_ServAddr.sin_family      = AF_INET;                 //設定連線樣式;//
     m_ServAddr.sin_port        = htons( Info.Port );      //設定連線PORT號碼;//
     m_ServAddr.sin_addr.s_addr = htonl( INADDR_ANY );     //設定伺服器接收來治任何介面上的連結請求;//
-    
+
     kSocket::GetLocalIp();
 
     return eERR_NONE;
@@ -112,63 +112,70 @@ int kServer::Select()
             //表示Client端的Socket有其他的請求;//
             else
             {
-                //這裡要稍微注意一下MAP的Erase的寫法是為了能與Linux下的MAP共用同樣程式碼而寫的;//
-                std::map< SOCKET, sockaddr_in >::iterator it = m_Clients.begin();
-                for( ; it != m_Clients.end(); )
-                {                        
-                    if( FD_ISSET( it->first, &m_SelectFds ) )
+                std::vector< ClientInfo >::iterator it = m_vClients.begin();
+                for (; it != m_vClients.end(); )
+                {
+                    if ( FD_ISSET(it->Socket, &m_SelectFds) )
                     {
+#ifdef WIN32
                         unsigned long ReceiveDataSize;
-
-                        if( IoctlCheck( it->first, FIONREAD, &ReceiveDataSize ) == false )
+                        if (ioctlsocket(it->Socket, FIONREAD, &ReceiveDataSize) == SOCKET_ERROR)
                             return eERR_SERVER_RECEIVE;
-
-                        if( ReceiveDataSize == 0 )
+#else
+                        int ReceiveDataSize;
+                        if (ioctl(it->Socket, FIONREAD, &ReceiveDataSize) < 0)
+                            return eERR_SERVER_RECEIVE;
+#endif
+                        //收到Size為0的話,表示Client中斷連線;//
+                        if (ReceiveDataSize == 0)
                         {
-                            printf( "\n" );
-                            printf( "[! Removing !] \n" );
-                            printf( "  Remove client on Fd %d \n", it->first );
-                            printf( "  Total Clients : %d \n", m_Clients.size()-1 );
+                            RemoveClient(it->Socket);
 
-                            if( m_ConnectCallbackFunc != NULL )
-                                m_ConnectCallbackFunc( m_ConnectWorkingClass, it->first, false, NULL );
-
-                            Close( it->first );
-                            FD_CLR( it->first, &m_SelectFds );
-                            m_Clients.erase( it++ );
+                            it = m_vClients.erase(it);
                         }
                         else
                         {
                             char *Buffer = new char[ReceiveDataSize];
-                            memset( Buffer, 0, ReceiveDataSize );
-                            recv( it->first, Buffer, ReceiveDataSize, 0 );
+                            memset(Buffer, 0, ReceiveDataSize);
+                            recv(it->Socket, Buffer, ReceiveDataSize, 0);
 
                             //查看是否為交握訊息;//
-                            if( CheckHandShake( Buffer, ReceiveDataSize ) == true )
+                            if (CheckHandShake(Buffer, ReceiveDataSize) == true)
                             {
-                                int ShakeLen = strlen( KSOCKET_HANDSHAKE_CODE );
-                                if( ( ReceiveDataSize - ShakeLen ) > 0 )
+                                int ShakeLen = strlen(KSOCKET_HANDSHAKE_CODE);
+                                if ((ReceiveDataSize - ShakeLen) > 0)
                                 {
-                                    if( m_RecvCallbackFunc != NULL )
-                                        m_RecvCallbackFunc( m_CallbackSocket, it->first, Buffer+ShakeLen, ReceiveDataSize-ShakeLen );
+                                    if (m_RecvCallbackFunc != NULL)
+                                        m_RecvCallbackFunc(m_CallbackSocket, it->Socket, Buffer + ShakeLen, ReceiveDataSize - ShakeLen);
                                 }
                             }
                             else
                             {
-                                if( m_RecvCallbackFunc != NULL )
-                                    m_RecvCallbackFunc( m_CallbackSocket, it->first, Buffer, ReceiveDataSize );
+                                if (m_RecvCallbackFunc != NULL)
+                                    m_RecvCallbackFunc(m_CallbackSocket, it->Socket, Buffer, ReceiveDataSize);
                             }
-                            delete [] Buffer;
+                            delete[] Buffer;
                             Buffer = NULL;
+
+                            //更新接收到資料的時間;//
+                            it->TimeOut = GetTickCount();
 
                             it++;
                         }
+                    }
+                    else if( GetTickCount() - it->TimeOut > 300000 )
+                    {
+                        //過30秒沒有傳輸過資料,把此Client視為斷線;//
+                        RemoveClient(it->Socket);
+
+                        it = m_vClients.erase(it);
                     }
                     else
                     {
                         it++;
                     }
                 }
+  
             }
         }
         break;
@@ -191,56 +198,76 @@ void kServer::ReSetCheckFd( fd_set &SelectFd )
     FD_ZERO( &SelectFd );
     FD_SET( m_SocketServer, &SelectFd );
 
-    std::map< SOCKET, sockaddr_in >::iterator it = m_Clients.begin();
-    for( ; it != m_Clients.end(); it++ )
+    for (int i = 0; i < (int)m_vClients.size(); i++)
     {
-        FD_SET( it->first, &SelectFd );
+        FD_SET(m_vClients[i].Socket, &SelectFd);
     }
 }
 
 int kServer::GetMaxFdNum()
 {
     unsigned int MaxNum = m_SocketServer;
-    std::map< SOCKET, sockaddr_in >::iterator it = m_Clients.begin();
-    for( ; it != m_Clients.end(); it++ )
+    for (int i = 0; i < (int)m_vClients.size(); i++)
     {
-        if( it->first > MaxNum )
-            MaxNum = it->first;
-    }
+        if (m_vClients[i].Socket > MaxNum)
+            MaxNum = m_vClients[i].Socket;
+    }    
 
     return MaxNum;
 }
 
 bool kServer::AddNewClient( SOCKET Server )
 {
-    //Accept;//
-    struct sockaddr_in ClientAddr;
-    socklen_t ClientLen = sizeof( ClientAddr );
-    SOCKET ClientSocket = accept( Server, (struct sockaddr *) &ClientAddr, &ClientLen );
-    if( ClientSocket < 0 )
+    ClientInfo Client;
+    memset( &Client, 0, sizeof(ClientInfo));
+    
+    socklen_t ClientLen = sizeof(sockaddr_in);
+    Client.Socket = accept(Server, (struct sockaddr *)&Client.Addr, &ClientLen);
+    if (Client.Socket < 0)
         return false;
 
-    m_Clients.insert( std::make_pair( ClientSocket, ClientAddr ) );
+    //紀錄建立連線時間,用以計算多久沒傳送資料時,視為斷線;//
+    Client.TimeOut = GetTickCount();
 
+    m_vClients.push_back(Client);
+    
     char IP[17];
+#ifdef WIN32
     sprintf_s( IP, "%d.%d.%d.%d",                
-                   ClientAddr.sin_addr.S_un.S_un_b.s_b1,
-                   ClientAddr.sin_addr.S_un.S_un_b.s_b2,
-                   ClientAddr.sin_addr.S_un.S_un_b.s_b3,
-                   ClientAddr.sin_addr.S_un.S_un_b.s_b4 );
+        Client.Addr.sin_addr.S_un.S_un_b.s_b1,
+        Client.Addr.sin_addr.S_un.S_un_b.s_b2,
+        Client.Addr.sin_addr.S_un.S_un_b.s_b3,
+        Client.Addr.sin_addr.S_un.S_un_b.s_b4 );
+#else
+    sprintf( IP, "%s", inet_ntoa(Client.Addr.sin_addr) );
+#endif
 
     //訊息;//
     printf( "\n" );
     printf( "[ Accept ]\n" );
-    printf( "  Fd No : %d\n", ClientSocket );
-    printf( "  Client Port No : %d \n", ClientAddr.sin_port );
+    printf( "  Fd No : %d\n", Client.Socket);
+    printf( "  Client Port No : %d \n", Client.Addr.sin_port );
     printf( "  Client Address : %s \n", IP );
-    printf( "  Total Clients : %d \n", m_Clients.size() );
+    printf( "  Total Clients : %d \n", (int)m_vClients.size() );
 
     if( m_ConnectCallbackFunc != NULL )
-        m_ConnectCallbackFunc( m_ConnectWorkingClass, ClientSocket, true, IP );
+        m_ConnectCallbackFunc( m_ConnectWorkingClass, Client.Socket, true, IP );
 
     return true;
+}
+
+void kServer::RemoveClient( SOCKET Clinet )
+{
+    printf("\n");
+    printf("[! Removing !] \n");
+    printf("  Remove client on Fd %d \n", Clinet );
+    printf("  Total Clients : %d \n", (int)m_vClients.size() - 1);
+
+    if (m_ConnectCallbackFunc != NULL)
+        m_ConnectCallbackFunc(m_ConnectWorkingClass, Clinet, false, NULL);
+
+    Close( Clinet );
+    FD_CLR( Clinet, &m_SelectFds );
 }
 
 void kServer::Close( SOCKET Fd )
@@ -260,12 +287,10 @@ void kServer::CloseAll()
         m_SocketServer = 0;
     }
 
-    std::map< SOCKET, sockaddr_in >::iterator it = m_Clients.begin();
-    for( ; it != m_Clients.end(); it++ )
+    for (int i = 0; i < (int)m_vClients.size(); i++)
     {
-        Close( it->first );
+        Close(m_vClients[i].Socket);
     }
-    m_Clients.clear();
+    m_vClients.clear();
 }
-
 

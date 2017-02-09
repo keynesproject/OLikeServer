@@ -43,7 +43,7 @@ int main( int argc, char *argv[] )
         return Error;
     }
 
-    //傳訊測試;//
+    //啟動Server;//
     while(1)
     {
         OLikeServer->Run();

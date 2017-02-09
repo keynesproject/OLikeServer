@@ -10,7 +10,7 @@
 //#define DIR_FIRMWARE "./UpdateData/Firmware"
 //#define DIR_CODEPLUG "./UpdateData/CodePlug"
 
-#define OLIKE_SERVER_PORT 80
+#define OLIKE_SERVER_PORT 8080
 
 /////////////////////////////////////////////////////////////////////////////
 // ServerAgent                                                                     
@@ -165,7 +165,11 @@ ServerContext::ServerContext( SOCKET ClientSocket, ServerAgent *Server, char *Cl
 {
     m_kServer = Server->GetSocketServer();
     m_Client = ClientSocket;
-    strcpy_s( m_ClientIP, ClientIp );
+#ifdef WIN32
+    strcpy_s(m_ClientIP, ClientIp);
+#else
+    strcpy(m_ClientIP, ClientIp);
+#endif    
 
     m_ServerStates.insert( make_pair(eSTATE_CONNECT, new StateConnect( this ) ) );
     m_ServerStates.insert( make_pair(eSTATE_RESPONSE, new StateResponse( this ) ) );
@@ -229,7 +233,11 @@ int ServerContext::Send( char Protocol, char *Data )
         Buffer += Ret;
         NeedSendSize -= Ret;
 
-        Sleep( 3 );
+#ifdef WIN32
+        Sleep(3);
+#else
+        usleep(3000);
+#endif
     }
 
     return Result;
@@ -321,10 +329,10 @@ int ServerContext::Receive( char *Data, int Size )
     if( m_kServer->CheckSyncCode(Data) == false )
     {
         printf( "[ Receive ] Check Sync Code Error!\n" );
-        char *DbgMsg = new char[Size + 1];
-        memcpy(DbgMsg, Data, Size);
-        DbgMsg[Size] = 0;
-        printf("[ MSG ] %s\n", DbgMsg);
+        printf("[ MSG ] ");
+        for (int i = 0; i < Size; i++)
+            printf("%x", Data[i]);
+        printf("\n");
         return eERR_SYNC_CODE;
     }
     
@@ -467,7 +475,11 @@ StateConnect::~StateConnect()
 int StateConnect::Receive(char Protocol, char *Data)
 {
     if (Protocol != PROTOCOL_C_CONNECT)
+    {
+        //回應Clinet端連線資訊錯誤;//
+        m_Contex->ReplyClient(eREPLY_CONNECT, false);
         return eERR_PROTOCOL;
+    }
 
     P_C_Request *Request = (P_C_Request*)Data;   
 

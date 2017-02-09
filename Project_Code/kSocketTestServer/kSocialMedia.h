@@ -1,5 +1,6 @@
 #pragma once
 
+#include <sstream>
 #include <map>
 #include <curl/curl.h>
 
@@ -43,11 +44,11 @@ public:
     ksmFaceBook();
     ~ksmFaceBook();
 
-    bool Initial() override;
+    bool Initial();
 
-    bool Close() override;
+    bool Close();
 
-    string Request(string ID, string Field) override;
+    string Request(string ID, string Field);
 
 private:
     string ParseJsonField(string Json, string Field);

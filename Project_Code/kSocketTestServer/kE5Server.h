@@ -120,7 +120,7 @@ public:
     StateConnect(ServerContext *Context);
     ~StateConnect();
 
-    int Receive(char Protocol, char *Data) override;
+    int Receive(char Protocol, char *Data);
 };
 
 /////////////////////////////////////////////////////////////////////////////
@@ -132,9 +132,9 @@ public:
     StateResponse(ServerContext *Context);
     ~StateResponse();
 
-    int Execute() override;
+    int Execute();
 
-    int Receive(char Protocol, char *Data) override;
+    int Receive(char Protocol, char *Data);
     
 private:
     clock_t m_ClkStart; //開始的時間;//    
@@ -149,7 +149,7 @@ public:
     StateError(ServerContext *Context);
     ~StateError();
 
-    int Receive(char Protocol, char *Data) override;
+    int Receive(char Protocol, char *Data);
 };
 
 /*
