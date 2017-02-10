@@ -23,7 +23,7 @@ class kSocialMedia
 {
 public:
     kSocialMedia() {};
-    ~kSocialMedia() {};
+    virtual ~kSocialMedia() {};
 
     //社群網站連線初始化;//
     virtual bool Initial() = 0;

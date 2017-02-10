@@ -252,33 +252,30 @@ const char *kSocket::GetLocalIp()
 
         for( ; ifc != NULL; ifc = (*ifc).ifa_next )
         {
-            if( strcmp( (*ifc).ifa_name, "eth0" ) == 0 )
+            printf( "%s", (*ifc).ifa_name );
+
+            if( NULL != (*ifc).ifa_addr )
             {
-                printf( "%s", (*ifc).ifa_name );
-
-                if( NULL != (*ifc).ifa_addr )
-                {
-                    inet_ntop( AF_INET, &(((struct sockaddr_in*)((*ifc).ifa_addr))->sin_addr), IpAddr, 64 );
-                    printf( "\t%s", IpAddr );
-                    sprintf( m_LocalIp, "%s", IpAddr );
-                }
-                else
-                {
-                    sprintf( m_LocalIp, "XXX.XXX.XXX.XXX" );
-                    printf("\t\t");
-                }
-
-                if( NULL != (*ifc).ifa_netmask ) 
-                {
-                    inet_ntop( AF_INET, &(((struct sockaddr_in*)((*ifc).ifa_netmask))->sin_addr), NetMask, 64 );
-                    printf( "\t%s", NetMask );
-                }
-                else
-                {
-                    printf("\t\t");
-                }
-                printf("\n");
+                inet_ntop( AF_INET, &(((struct sockaddr_in*)((*ifc).ifa_addr))->sin_addr), IpAddr, 64 );
+                printf( "\t%s", IpAddr );
+                sprintf( m_LocalIp, "%s", IpAddr );
             }
+            else
+            {
+                sprintf( m_LocalIp, "XXX.XXX.XXX.XXX" );
+                printf("\t\t");
+            }
+
+            if( NULL != (*ifc).ifa_netmask ) 
+            {
+                inet_ntop( AF_INET, &(((struct sockaddr_in*)((*ifc).ifa_netmask))->sin_addr), NetMask, 64 );
+                printf( "\t%s", NetMask );
+            }
+            else
+            {
+                printf("\t\t");
+            }
+            printf("\n");
         }
 
         freeifaddrs( ifc1 );

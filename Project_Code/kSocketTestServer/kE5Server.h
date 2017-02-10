@@ -56,7 +56,7 @@ public:
 
 public:
     ServerContext( SOCKET ClientSocket, ServerAgent *Server, char *ClientIp );
-    ~ServerContext();
+    virtual ~ServerContext();
 
     char *GetClientIP();
 
@@ -101,7 +101,7 @@ class BaseState
 {
 public:
     BaseState( ServerContext *Context );
-    ~BaseState();
+    virtual ~BaseState();
 
     virtual int Execute();
 

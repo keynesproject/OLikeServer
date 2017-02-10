@@ -44,7 +44,11 @@ private:
     {
         SOCKET        Socket;
         sockaddr_in   Addr;
+#ifdef WIN32
         unsigned long TimeOut;
+#else
+        timeval TimeOut;
+#endif
     };
     std::vector< ClientInfo > m_vClients;
 

@@ -1,7 +1,7 @@
 #include "kE5Server.h"
+#include <stdlib.h> 
 
 #ifdef _DEBUG
-#include <stdlib.h> 
 #include <crtdbg.h> 
 void EnableMemLeakCheck()
 {
