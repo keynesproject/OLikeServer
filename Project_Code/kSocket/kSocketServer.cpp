@@ -41,6 +41,8 @@ int kServer::Create( SocketInfo Info )
 
 int kServer::Active()
 {
+    int Yes = 1;
+    setsockopt( m_SocketServer, SOL_SOCKET, SO_REUSEADDR, (const char*)&Yes, sizeof(int));
     //Bind;//
     if( bind( m_SocketServer, (struct sockaddr *)&m_ServAddr, sizeof(m_ServAddr) ) < 0 )
     {
@@ -88,20 +90,23 @@ int kServer::Select()
     ReSetCheckFd(m_SelectFds);
     fd_set ReadFds = m_SelectFds;
 
-    switch (select(this->GetMaxFdNum() + 1, &ReadFds, (fd_set *)0, (fd_set *)0, &m_SelectTime))
-    {
-    case -1:
-    {
-        //printf( "[ Error ] Select Time Out!\n" );
-    }
-    break;
+    int Res = select(this->GetMaxFdNum() + 1, &ReadFds, (fd_set *)0, (fd_set *)0, &m_SelectTime);
 
-    case 0:
+    //select錯誤,基本上為Timeout錯誤;//
+    if (Res == -1)
     {
-        //printf( "[ Select ] Continute! \n" );
+        //printf("[ Error ] Select error Timeout!\n");
+        return eERR_SERVER_SELECT;
+    }
+
+    //表示沒有需要作用的 SOCKET;//
+    if (Res == 0)
+    {
+        //printf("[ Select ] Continute! \n");
         //判斷Client Socket是否過久沒傳輸訊息,要移除連線;//
-        std::vector< ClientInfo >::iterator it = m_vClients.begin();
-        for (; it != m_vClients.end(); )
+        /*
+        std::vector< ClientInfo >::iterator it = m_Clients.begin();
+        for (; it != m_Clients.end(); )
         {
 #ifdef WIN32
             unsigned long NowTime = GetTickCount();
@@ -115,106 +120,103 @@ int kServer::Select()
                 //過20秒沒有傳輸過資料,把此Client視為斷線;//
                 RemoveClient(it->Socket);
 
-                it = m_vClients.erase(it);
+                it = m_Clients.erase(it);
             }
             else
             {
                 it++;
             }
         }
+        */
+        return eERR_NONE;
     }
-    break;
 
-    default:
+
+    //表示Server Socket有client請求連線的訊息;//
+    if (FD_ISSET(m_SocketServer, &ReadFds))
     {
-        //表示Server Socket有client請求連線的訊息;//
-        if (FD_ISSET(m_SocketServer, &ReadFds))
+        //加入新的Client連線資訊;//
+        AddNewClient(m_SocketServer);
+    }
+    //表示Client端的Socket有其他的請求;//
+    else
+    {
+        std::vector< ClientInfo >::iterator it = m_Clients.begin();
+        for (; it != m_Clients.end(); )
         {
-            //加入新的Client連線資訊;//
-            AddNewClient(m_SocketServer);
-        }
-        //表示Client端的Socket有其他的請求;//
-        else
-        {
-            std::vector< ClientInfo >::iterator it = m_vClients.begin();
-            for (; it != m_vClients.end(); )
+            if (FD_ISSET(it->Socket, &ReadFds))
             {
-                if (FD_ISSET(it->Socket, &ReadFds))
+#ifdef WIN32
+                unsigned long ReceiveDataSize;
+                if (ioctlsocket(it->Socket, FIONREAD, &ReceiveDataSize) == SOCKET_ERROR)
+                    return eERR_SERVER_RECEIVE;
+#else
+                int ReceiveDataSize;
+                if (ioctl(it->Socket, FIONREAD, &ReceiveDataSize) < 0)
+                    return eERR_SERVER_RECEIVE;
+#endif
+                //收到Size為0的話,表示Client中斷連線;//
+                if (ReceiveDataSize == 0)
                 {
-#ifdef WIN32
-                    unsigned long ReceiveDataSize;
-                    if (ioctlsocket(it->Socket, FIONREAD, &ReceiveDataSize) == SOCKET_ERROR)
-                        return eERR_SERVER_RECEIVE;
-#else
-                    int ReceiveDataSize;
-                    if (ioctl(it->Socket, FIONREAD, &ReceiveDataSize) < 0)
-                        return eERR_SERVER_RECEIVE;
-#endif
-                    //收到Size為0的話,表示Client中斷連線;//
-                    if (ReceiveDataSize == 0)
-                    {
-                        RemoveClient(it->Socket);
+                    RemoveClient(it->Socket);
 
-                        it = m_vClients.erase(it);
-                    }
-                    else
-                    {
-                        char *Buffer = new char[ReceiveDataSize];
-                        memset(Buffer, 0, ReceiveDataSize);
-                        recv(it->Socket, Buffer, ReceiveDataSize, 0);
-
-                        //查看是否為交握訊息;//
-                        if (CheckHandShake(Buffer, ReceiveDataSize) == true)
-                        {
-                            int ShakeLen = strlen(KSOCKET_HANDSHAKE_CODE);
-                            if ((ReceiveDataSize - ShakeLen) > 0)
-                            {
-                                if (m_RecvCallbackFunc != NULL)
-                                    m_RecvCallbackFunc(m_CallbackSocket, it->Socket, Buffer + ShakeLen, ReceiveDataSize - ShakeLen);
-                            }
-                        }
-                        else
-                        {
-                            if (m_RecvCallbackFunc != NULL)
-                                m_RecvCallbackFunc(m_CallbackSocket, it->Socket, Buffer, ReceiveDataSize);
-                        }
-                        delete[] Buffer;
-                        Buffer = NULL;
-
-                        //更新接收到資料的時間;//
-#ifdef WIN32
-                        it->TimeOut = GetTickCount();
-#else
-                        gettimeofday(&it->TimeOut, NULL);
-#endif
-                        it++;
-                    }
+                    it = m_Clients.erase(it);
                 }
                 else
                 {
-#ifdef WIN32
-                    unsigned long NowTime = GetTickCount();
-                    if (NowTime - it->TimeOut > 200000)
-#else
-                    timeval NowTime;
-                    gettimeofday(&NowTime, NULL);
-                    if (NowTime.tv_sec - it->TimeOut.tv_sec >= 20)
-#endif                  
-                    {
-                        //過20秒沒有傳輸過資料,把此Client視為斷線;//
-                        RemoveClient(it->Socket);
+                    char *Buffer = new char[ReceiveDataSize];
+                    memset(Buffer, 0, ReceiveDataSize);
+                    recv(it->Socket, Buffer, ReceiveDataSize, 0);
 
-                        it = m_vClients.erase(it);
+                    //查看是否為交握訊息;//
+                    if (CheckHandShake(Buffer, ReceiveDataSize) == true)
+                    {
+                        int ShakeLen = strlen(KSOCKET_HANDSHAKE_CODE);
+                        if ((ReceiveDataSize - ShakeLen) > 0)
+                        {
+                            if (m_RecvCallbackFunc != NULL)
+                                m_RecvCallbackFunc(m_CallbackSocket, it->Socket, Buffer + ShakeLen, ReceiveDataSize - ShakeLen);
+                        }
                     }
                     else
                     {
-                        it++;
+                        if (m_RecvCallbackFunc != NULL)
+                            m_RecvCallbackFunc(m_CallbackSocket, it->Socket, Buffer, ReceiveDataSize);
                     }
+                    delete[] Buffer;
+                    Buffer = NULL;
+
+                    //更新接收到資料的時間;//
+#ifdef WIN32
+                    it->TimeOut = GetTickCount();
+#else
+                    gettimeofday(&it->TimeOut, NULL);
+#endif
+                    it++;
+                }
+            }
+            else
+            {
+#ifdef WIN32
+                unsigned long NowTime = GetTickCount();
+                if (NowTime - it->TimeOut > 200000)
+#else
+                timeval NowTime;
+                gettimeofday(&NowTime, NULL);
+                if (NowTime.tv_sec - it->TimeOut.tv_sec >= 20)
+#endif                  
+                {
+                    //過20秒沒有傳輸過資料,把此Client視為斷線;//
+                    RemoveClient(it->Socket);
+
+                    it = m_Clients.erase(it);
+                }
+                else
+                {
+                    it++;
                 }
             }
         }
-    }
-    break;
     }
 
     return eERR_NONE;
@@ -234,19 +236,19 @@ void kServer::ReSetCheckFd( fd_set &SelectFd )
     FD_ZERO( &SelectFd );
     FD_SET( m_SocketServer, &SelectFd );
 
-    for (int i = 0; i < (int)m_vClients.size(); i++)
+    for (int i = 0; i < (int)m_Clients.size(); i++)
     {
-        FD_SET(m_vClients[i].Socket, &SelectFd);
+        FD_SET(m_Clients[i].Socket, &SelectFd);
     }
 }
 
 int kServer::GetMaxFdNum()
 {
     unsigned int MaxNum = m_SocketServer;
-    for (int i = 0; i < (int)m_vClients.size(); i++)
+    for (int i = 0; i < (int)m_Clients.size(); i++)
     {
-        if (m_vClients[i].Socket > MaxNum)
-            MaxNum = m_vClients[i].Socket;
+        if (m_Clients[i].Socket > MaxNum)
+            MaxNum = m_Clients[i].Socket;
     }    
 
     return MaxNum;
@@ -269,7 +271,7 @@ bool kServer::AddNewClient( SOCKET Server )
     gettimeofday( &Client.TimeOut, NULL );
 #endif
 
-    m_vClients.push_back(Client);
+    m_Clients.push_back(Client);
     
     char IP[17];
 #ifdef WIN32
@@ -288,7 +290,7 @@ bool kServer::AddNewClient( SOCKET Server )
     printf( "  Fd No : %d\n", Client.Socket);
     printf( "  Client Port No : %d \n", Client.Addr.sin_port );
     printf( "  Client Address : %s \n", IP );
-    printf( "  Total Clients : %d \n", (int)m_vClients.size() );
+    printf( "  Total Clients : %d \n", (int)m_Clients.size() );
 
     if( m_ConnectCallbackFunc != NULL )
         m_ConnectCallbackFunc( m_ConnectWorkingClass, Client.Socket, true, IP );
@@ -301,7 +303,7 @@ void kServer::RemoveClient( SOCKET Clinet )
     printf("\n");
     printf("[! Removing !] \n");
     printf("  Remove client on Fd %d \n", Clinet );
-    printf("  Total Clients : %d \n", (int)m_vClients.size() - 1);
+    printf("  Total Clients : %d \n", (int)m_Clients.size() - 1);
 
     if (m_ConnectCallbackFunc != NULL)
         m_ConnectCallbackFunc(m_ConnectWorkingClass, Clinet, false, NULL);
@@ -327,10 +329,10 @@ void kServer::CloseAll()
         m_SocketServer = 0;
     }
 
-    for (int i = 0; i < (int)m_vClients.size(); i++)
+    for (int i = 0; i < (int)m_Clients.size(); i++)
     {
-        Close(m_vClients[i].Socket);
+        Close(m_Clients[i].Socket);
     }
-    m_vClients.clear();
+    m_Clients.clear();
 }
 

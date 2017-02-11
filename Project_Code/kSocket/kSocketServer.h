@@ -50,7 +50,7 @@ private:
         timeval TimeOut;
 #endif
     };
-    std::vector< ClientInfo > m_vClients;
+    std::vector< ClientInfo > m_Clients;
 
     void *m_ConnectWorkingClass;
     CONNECT_CALLBACK_FUNC m_ConnectCallbackFunc;
