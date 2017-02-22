@@ -1,9 +1,9 @@
 #include "kSocketServer.h"
 
 /////////////////////////////////////////////////////////////////////////////
-// kServer                                                                     
+// kTcpServer                                                                     
 /////////////////////////////////////////////////////////////////////////////
-kServer::kServer()
+kTcpServer::kTcpServer()
 : m_SocketServer(0)
 , m_ConnectWorkingClass( NULL )
 , m_ConnectCallbackFunc( NULL )
@@ -12,15 +12,15 @@ kServer::kServer()
     m_SelectTime.tv_usec = 0;
 }
 
-kServer::~kServer()
+kTcpServer::~kTcpServer()
 {
     this->CloseAll();
 }
 
-int kServer::Create( SocketInfo Info )
+int kTcpServer::Create( SocketInfo Info )
 {
-    //_mSocket = socket( AF_UNIX, SOCK_STREAM, 0 );   //本地端連線，local to host (pipes, portals);//
-    m_SocketServer = socket( AF_INET, SOCK_STREAM, 0 );     //網路連線，internetwork: UDP, TCP, etc.;//
+    //m_SocketServer = socket( AF_UNIX, SOCK_STREAM, 0 );   //本地端連線，local to host (pipes, portals);//
+    m_SocketServer = socket( AF_INET, SOCK_STREAM, 0 );   //網路連線TCP，internetwork: UDP, TCP, etc.;//
     if( m_SocketServer < 0 )
         return eERR_OPEN_SOCKET;
 
@@ -33,16 +33,18 @@ int kServer::Create( SocketInfo Info )
     m_ServAddr.sin_family      = AF_INET;                 //設定連線樣式;//
     m_ServAddr.sin_port        = htons( Info.Port );      //設定連線PORT號碼;//
     m_ServAddr.sin_addr.s_addr = htonl( INADDR_ANY );     //設定伺服器接收來治任何介面上的連結請求;//
-
+    
     kSocket::GetLocalIp();
 
     return eERR_NONE;
 }
 
-int kServer::Active()
+int kTcpServer::Active()
 {
+    //設定Port可以重複使用,避免不正常關閉時的Port佔用問題;//
     int Yes = 1;
     setsockopt( m_SocketServer, SOL_SOCKET, SO_REUSEADDR, (const char*)&Yes, sizeof(int));
+    
     //Bind;//
     if( bind( m_SocketServer, (struct sockaddr *)&m_ServAddr, sizeof(m_ServAddr) ) < 0 )
     {
@@ -56,29 +58,37 @@ int kServer::Active()
         this->CloseAll();
         return eERR_LISTEN;
     }
-
-    printf( "[ StartUp ] Waiting client Connect!! \n" );
+    
+    printf( "[ StartUp ] Waiting TCP Client Connect!! \n" );
 
     return eERR_NONE;
 }
 
-int kServer::Send( char *Data, int DataLen )
+int kTcpServer::Send( SOCKET ToSocket, char *Data, int DataLen )
 {
-    //依照protocol內容寄送給指定的Socket;//
-    //if( send( m_SocketServer, Data, DataLen, 0 ) < 0 )
-    //{
-    //    return eERR_SERVER_SEND;
-    //}
+    //先查詢有無指定的Client Socket;//
+    std::vector< ClientInfo >::iterator it = m_Clients.begin();
+    for (;; it++)
+    {
+        if (it == m_Clients.end())
+            return eERR_SERVER_SEND_NOT_FOUND_CLIEN;
 
-    return eERR_NONE;
+        if (it->Socket == ToSocket)
+            break;
+    }
+
+    //依照protocol內容寄送給指定的Socket;//
+    int Ret = send(ToSocket, Data, DataLen, 0);
+
+    return Ret;
 }
 
-int kServer::Receive( char *ReData, int &ReDataLen )
+int kTcpServer::Receive( char *ReData, int &ReDataLen )
 {    
     return eERR_NONE;
 }
 
-int kServer::Select()
+int kTcpServer::Select()
 {
     if (m_isCloseThread == true)
     {
@@ -130,7 +140,6 @@ int kServer::Select()
         */
         return eERR_NONE;
     }
-
 
     //表示Server Socket有client請求連線的訊息;//
     if (FD_ISSET(m_SocketServer, &ReadFds))
@@ -222,7 +231,7 @@ int kServer::Select()
     return eERR_NONE;
 }
 
-void kServer::SetClientConnectCallBack( void *WorkingClass, CONNECT_CALLBACK_FUNC Func )
+void kTcpServer::SetClientConnectCallBack( void *WorkingClass, CONNECT_CALLBACK_FUNC Func )
 {
     if( WorkingClass == NULL || Func == NULL )
         return;
@@ -231,7 +240,7 @@ void kServer::SetClientConnectCallBack( void *WorkingClass, CONNECT_CALLBACK_FUN
     m_ConnectCallbackFunc = Func;
 }
 
-void kServer::ReSetCheckFd( fd_set &SelectFd )
+void kTcpServer::ReSetCheckFd( fd_set &SelectFd )
 {
     FD_ZERO( &SelectFd );
     FD_SET( m_SocketServer, &SelectFd );
@@ -242,7 +251,7 @@ void kServer::ReSetCheckFd( fd_set &SelectFd )
     }
 }
 
-int kServer::GetMaxFdNum()
+int kTcpServer::GetMaxFdNum()
 {
     unsigned int MaxNum = m_SocketServer;
     for (int i = 0; i < (int)m_Clients.size(); i++)
@@ -254,7 +263,7 @@ int kServer::GetMaxFdNum()
     return MaxNum;
 }
 
-bool kServer::AddNewClient( SOCKET Server )
+bool kTcpServer::AddNewClient( SOCKET Server )
 {
     ClientInfo Client;
     memset( &Client, 0, sizeof(ClientInfo));
@@ -298,7 +307,7 @@ bool kServer::AddNewClient( SOCKET Server )
     return true;
 }
 
-void kServer::RemoveClient( SOCKET Clinet )
+void kTcpServer::RemoveClient( SOCKET Clinet )
 {
     printf("\n");
     printf("[! Removing !] \n");
@@ -312,7 +321,7 @@ void kServer::RemoveClient( SOCKET Clinet )
     FD_CLR( Clinet, &m_SelectFds );
 }
 
-void kServer::Close( SOCKET Fd )
+void kTcpServer::Close( SOCKET Fd )
 {
 #ifdef WIN32
     closesocket( Fd );
@@ -321,7 +330,7 @@ void kServer::Close( SOCKET Fd )
 #endif
 }
 
-void kServer::CloseAll()
+void kTcpServer::CloseAll()
 {    
     if( m_SocketServer != 0 )
     {
@@ -336,3 +345,258 @@ void kServer::CloseAll()
     m_Clients.clear();
 }
 
+/////////////////////////////////////////////////////////////////////////////
+//  kUdpServer                                                                    
+/////////////////////////////////////////////////////////////////////////////
+kUdpServer::kUdpServer()
+: m_SocketServer(0)
+{
+}
+
+kUdpServer::~kUdpServer()
+{
+    this->CloseAll();
+}
+
+int kUdpServer::Create(SocketInfo Info)
+{
+    //網路連線UDP
+    m_SocketServer = socket(AF_INET, SOCK_DGRAM, 0);
+
+    if (m_SocketServer < 0)
+        return eERR_OPEN_SOCKET;
+
+    //非阻塞式通訊設定;//
+    if (SetNonBlocking(m_SocketServer) == false)
+        return eERR_BLOCK_SETTING;
+
+    //設定Server資訊;//
+    memset((char *)&m_ServAddr, 0, sizeof(m_ServAddr));
+    m_ServAddr.sin_family = AF_INET;                 //設定連線樣式;//
+    m_ServAddr.sin_port = htons(Info.Port);      //設定連線PORT號碼;//
+    m_ServAddr.sin_addr.s_addr = htonl(INADDR_ANY);     //設定伺服器接收來治任何介面上的連結請求;//
+
+    kSocket::GetLocalIp();
+
+    return eERR_NONE;
+}
+
+int kUdpServer::Send( SOCKET ToSocket, char *Data, int DataLen)
+{
+    //先查詢有無指定的Client Socket;//
+    std::vector< ClientInfo >::iterator it = m_Clients.begin();
+    for (;; it++)
+    {
+        if (it == m_Clients.end())
+            return -1;
+
+        if (it->Socket == ToSocket)
+            break;
+    }
+
+    //依照protocol內容寄送給指定的Socket;//
+    int ClientLen = sizeof(it->Addr);
+    int Ret = sendto(m_SocketServer, Data, DataLen, 0, (sockaddr*)&it->Addr, ClientLen);
+    
+    return Ret;
+}
+
+int kUdpServer::Receive(char *ReData, int &ReDataLen)
+{
+    return eERR_NONE;
+}
+
+int kUdpServer::Select()
+{
+    if (m_isCloseThread == true)
+    {
+        pthread_exit(NULL);
+        return eERR_NONE;
+    }
+
+    FD_ZERO(&m_ReadFds);
+    FD_SET(m_SocketServer, &m_ReadFds);
+
+    switch (select(m_SocketServer + 1, &m_ReadFds, NULL, NULL, &m_SelectTime))
+    {
+        //Select錯誤,退出程序;//
+    case -1:
+        exit(-1);
+        break;
+
+        //Select愈時,再次輪巡;//
+    case 0:
+        break;
+
+    default:
+        if (FD_ISSET(m_SocketServer, &m_ReadFds))
+        {
+#ifdef WIN32
+            unsigned long ReceiveDataSize;
+            if (ioctlsocket(m_SocketServer, FIONREAD, &ReceiveDataSize) == SOCKET_ERROR)
+                return eERR_SERVER_RECEIVE;
+#else
+            int ReceiveDataSize;
+            if (ioctl(m_SocketServer, FIONREAD, &ReceiveDataSize) < 0)
+                return eERR_SERVER_RECEIVE;
+#endif
+            //收到Size為0的話,表示Client中斷連線;//
+            if (ReceiveDataSize == 0)
+            {
+                int a = 5;
+            }
+            else
+            {
+                char *Buffer = new char[ReceiveDataSize];
+                memset(Buffer, 0, ReceiveDataSize);
+
+                //接收數據;//
+                sockaddr_in NewClient;
+                int ClientLen = sizeof(NewClient);
+                int Ret = recvfrom(m_SocketServer, Buffer, ReceiveDataSize, 0, (struct sockaddr *)&NewClient, &ClientLen);
+                if ( Ret<0 )
+                {
+                    fprintf(stderr, "[ Recvfrom failed ] error no %d\n ", errno);
+                    perror("recvform call failed");
+                    //exit(errno);
+                }
+
+                //檢查Client是否需要新增連線資訊;//
+                ClientInfo *ConnectClient = CheckClient(NewClient);
+                                
+                //查看是否為交握訊息;//
+                if (CheckHandShake(Buffer, ReceiveDataSize) == true)
+                {
+                    int ShakeLen = strlen(KSOCKET_HANDSHAKE_CODE);
+                    if ((ReceiveDataSize - ShakeLen) > 0)
+                    {
+                        if (m_RecvCallbackFunc != NULL)
+                            m_RecvCallbackFunc(m_CallbackSocket, ConnectClient->Socket, Buffer + ShakeLen, ReceiveDataSize - ShakeLen);
+                    }
+                }
+                else
+                {
+                    if (m_RecvCallbackFunc != NULL)
+                        m_RecvCallbackFunc(m_CallbackSocket, ConnectClient->Socket, Buffer, ReceiveDataSize);
+                }
+                delete[] Buffer;
+                Buffer = NULL;
+            }
+        }
+    }
+
+    return eERR_NONE;
+}
+
+SOCKET kUdpServer::GetSocketFd()
+{
+    return m_SocketServer;
+}
+
+void kUdpServer::SetClientConnectCallBack(void *WorkingClass, CONNECT_CALLBACK_FUNC Func)
+{
+    if (WorkingClass == NULL || Func == NULL)
+        return;
+
+    m_ConnectWorkingClass = WorkingClass;
+    m_ConnectCallbackFunc = Func;
+}
+
+int kUdpServer::Active()
+{
+    //設定Port可以重複使用,避免不正常關閉時的Port佔用問題;//
+    int Yes = 1;
+    setsockopt(m_SocketServer, SOL_SOCKET, SO_REUSEADDR, (const char*)&Yes, sizeof(int));
+
+    //Bind;//
+    if (bind(m_SocketServer, (struct sockaddr *)&m_ServAddr, sizeof(m_ServAddr)) < 0)
+    {
+        this->CloseAll();
+        return eERR_BIND;
+    }
+
+    printf("[ StartUp ] Waiting UDP Client Connect!! \n");
+
+    return eERR_NONE;
+}
+
+void kUdpServer::CloseAll()
+{
+    if (m_SocketServer != 0)
+    {
+#ifdef WIN32
+        closesocket(m_SocketServer);
+#else
+        close(m_SocketServer);
+#endif
+    }
+}
+
+ClientInfo* kUdpServer::CheckClient(sockaddr_in Addr)
+{
+    //先檢查此資料的Client是否存在;//
+    for (size_t i = 0; i < m_Clients.size(); i++)
+    {
+        if (memcmp(&Addr, &m_Clients[i].Addr, sizeof(sockaddr_in)) == 0)
+            return &m_Clients[i];
+    }
+
+    //建立一個唯一的Socket編號;//
+    ClientInfo NewClient;    
+    NewClient.Socket = 1;
+    bool bSameNo = false;
+    do
+    {
+        bSameNo = false;
+        for (size_t i = 0; i < m_Clients.size(); i++)
+        {
+            if (m_Clients[i].Socket == NewClient.Socket)
+            {
+                bSameNo = true;
+                break;
+            }
+        }
+
+        if (bSameNo)
+            NewClient.Socket++;
+    } while (bSameNo);
+
+    //紀錄Client資料;//
+    memcpy(&NewClient.Addr, &Addr, sizeof(sockaddr_in));
+       
+    //紀錄建立連線時間,用以計算多久沒傳送資料時,視為斷線;//
+#ifdef WIN32
+    NewClient.TimeOut = GetTickCount();
+#else
+    gettimeofday(&Client.TimeOut, NULL);
+#endif
+    
+    char IP[17];
+#ifdef WIN32
+    sprintf_s(IP, "%d.%d.%d.%d",
+        NewClient.Addr.sin_addr.S_un.S_un_b.s_b1,
+        NewClient.Addr.sin_addr.S_un.S_un_b.s_b2,
+        NewClient.Addr.sin_addr.S_un.S_un_b.s_b3,
+        NewClient.Addr.sin_addr.S_un.S_un_b.s_b4);
+#else
+    sprintf(IP, "%s", inet_ntoa(Client.Addr.sin_addr));
+#endif
+
+    //訊息;//
+    printf("\n");
+    printf("[ UDP Connect ]\n");
+    printf("  Fd No : %d\n", NewClient.Socket);
+    printf("  Client Port No : %d \n", NewClient.Addr.sin_port);
+    printf("  Client Address : %s \n", IP);
+    printf("  Total Clients : %d \n", (int)m_Clients.size());
+    
+    //加入一個新的Client;//
+    m_Clients.push_back(NewClient);
+
+    //通知上層有Client連結;//
+    if (m_ConnectCallbackFunc != NULL)
+        m_ConnectCallbackFunc(m_ConnectWorkingClass, NewClient.Socket, true, IP);
+
+
+    return &m_Clients[m_Clients.size() - 1];
+}

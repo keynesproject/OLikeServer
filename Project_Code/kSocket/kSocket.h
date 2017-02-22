@@ -49,8 +49,9 @@ class kSocket;
 /////////////////////////////////////////////////////////////////////////////
 enum SocketType
 {
-    eTYPE_SERVER = 0,
-    eTYPE_CLIENT,
+    eTYPE_TCP_SERVER = 0,
+    eTYPE_TCP_CLIENT,
+    eTYPE_UDP_SERVER
 };
 
 struct SocketInfo 
@@ -80,11 +81,12 @@ enum SocketErrorMSG
     eERR_CLIENT_RECEIVE,
     eERR_CLIENT_SELECT,
     eERR_CLIENT_REPLY,
-    eERR_SERVER_SEND,
+    eERR_SERVER_SEND,    
     eERR_SERVER_RECEIVE,
-    eERR_SERVER_SELECT,
+    eERR_SERVER_SELECT,                
     eERR_SERVER_REPLY,      //20//
-    
+    eERR_SERVER_SEND_NOT_FOUND_CLIEN,
+
     eERR_THREAD_TERMINAL,     
     eERR_RECV_EMPTY,
     eERR_SYNC_CODE,
@@ -116,7 +118,7 @@ public:
     virtual ~kSocket();
 
     virtual int  Create( SocketInfo Info ) = 0;
-    virtual int  Send( char *Data, int DataLen ) = 0;
+    virtual int  Send( SOCKET ToSocket, char *Data, int DataLen ) = 0;
     virtual int  Receive( char *ReData, int &ReDataLen ) = 0;
     virtual int  Select() = 0;
 
@@ -135,14 +137,14 @@ public:
     int  GetProtocolStructSize( char Protocol );
     bool CheckCRC( ProtocolHeadStruct *CheckData );
 
+    const char* GetLocalIp();
+
 protected:
     virtual int  Active();                  //設定Socket啟動的動作;//
     virtual void CloseAll() = 0;            //關閉清除所有連線的Socket;//
 
     bool SetNonBlocking( SOCKET &Socket );
-
-    const char* GetLocalIp(); 
-    
+            
 protected:
     void *m_CallbackSocket;
     RECV_CALLBACK_FUNC m_RecvCallbackFunc;

@@ -36,7 +36,7 @@ int main( int argc, char *argv[] )
 
     ServerAgent *OLikeServer = new ServerAgent();
 
-    Error = OLikeServer->Initialize();
+    Error = OLikeServer->Initialize(SocketType::eTYPE_UDP_SERVER);
     if( Error != eERR_NONE )
     {
         delete OLikeServer;

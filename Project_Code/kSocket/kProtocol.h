@@ -19,13 +19,19 @@
 #define PROTOCOL_SYNC3  (char)0X45
 
 //回應另一端失敗或成功的類型;//
-enum ProtocolTypeReply
-{
-    eREPLY_CHECK_ALIVE = 0,
-    eREPLY_CONNECT,
-    eREPLY_REQUEST_DATA,
-    eREPLY_RESPONSE,
-};
+//enum ProtocolTypeReply
+//{
+//    eREPLY_CHECK_ALIVE = 0,
+//    eREPLY_CONNECT,
+//    eREPLY_REQUEST_DATA,
+//    eREPLY_RESPONSE,
+//};
+
+//ProtocolTypeReply 回應另一端失敗或成功的類型;//
+#define   REPLY_CHECK_ALIVE  (char)0x01
+#define   REPLY_CONNECT      (char)0x01
+#define   REPLY_REQUEST_DATA (char)0x02
+#define   REPLY_RESPONSE     (char)0x03
 
 #pragma pack( push, 1 ) //保持1字節的對齊方式;//
 

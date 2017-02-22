@@ -4,7 +4,6 @@
 #include <time.h>
 #include <map>
 
-
 using namespace std;
 
 class BaseState;
@@ -20,7 +19,7 @@ public:
     ServerAgent();
     ~ServerAgent();
 
-    int Initialize();
+    int Initialize(SocketType Type);
 
     void Run();
 
@@ -51,7 +50,7 @@ public:
     {
         eSTATE_CONNECT = 0,
         eSTATE_RESPONSE,
-        eSTATE_ERROR,
+        eSTATE_ERROR
     };
 
 public:
@@ -62,8 +61,8 @@ public:
 
     int  Send( char Protocol, char *Data );
     
-    void ReplyClient( ProtocolTypeReply Type, bool IsSucess );
-    void ShowReplyMsg( bool isGet, ProtocolTypeReply Type, bool IsSucess );
+    void ReplyClient( char Type, bool IsSucess );
+    void ShowReplyMsg( bool isGet, char Type, bool IsSucess );
 
     void SetState( ServerState State );    
     void UndoState();
@@ -151,4 +150,3 @@ public:
 
     int Receive(char Protocol, char *Data);
 };
-

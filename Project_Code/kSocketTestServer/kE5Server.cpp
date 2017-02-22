@@ -2,7 +2,8 @@
 #include "kE5Server.h"
 #include "kSocialMedia.h"
 
-#define OLIKE_SERVER_PORT 8888
+//#define OLIKE_SERVER_PORT 8888 //tcp 8080-8088
+#define OLIKE_SERVER_PORT 8090 //udp 8090-8099
 
 /////////////////////////////////////////////////////////////////////////////
 // ServerAgent                                                                     
@@ -21,7 +22,7 @@ ServerAgent::~ServerAgent()
     this->CloseSocket();
 }
 
-int ServerAgent::Initialize()
+int ServerAgent::Initialize(SocketType Type)
 {
     this->CloseSocket();
 
@@ -29,7 +30,7 @@ int ServerAgent::Initialize()
     SocketInfo Info;    
     memset( &Info, 0, sizeof(SocketInfo) );
     Info.Port = OLIKE_SERVER_PORT;
-    Info.Type = eTYPE_SERVER;
+    Info.Type = Type;
 
     //建立Socket;//
     kSocketFactory Factory;
@@ -42,7 +43,14 @@ int ServerAgent::Initialize()
 
     //設定接收CallbackFunc;//
     m_kServer->SetReceiveCallBack( (void*)this, &ReceiveDataCallFunc );
-    ((kServer*)m_kServer)->SetClientConnectCallBack( (void*)this, &ConnectCallFunc );
+    if (Info.Type == eTYPE_TCP_SERVER)
+    {
+        ((kTcpServer*)m_kServer)->SetClientConnectCallBack((void*)this, &ConnectCallFunc);
+    }
+    else if(Info.Type == eTYPE_UDP_SERVER)
+    {
+        ((kUdpServer*)m_kServer)->SetClientConnectCallBack((void*)this, &ConnectCallFunc);
+    }
 
     //Server啟動;//
     if( m_kServer->SetActive( true ) == false )
@@ -215,10 +223,14 @@ int ServerContext::Send( char Protocol, char *Data )
     while( NeedSendSize )
     {
         //小於0表示出錯;//
-        int Ret = send( m_Client, Buffer, NeedSendSize, 0 );       
-        if( Ret <= 0 )
+        int Ret = m_kServer->Send(m_Client, Buffer, NeedSendSize);
+        //int Ret = send( m_Client, Buffer, NeedSendSize, 0 );       
+        if( Ret < 0 )
         {
             Result = eERR_SERVER_SEND;
+
+            printf("[Server Send Error] Socket ID:%d, Size:%d \nData:%s\n", m_Client, NeedSendSize, Buffer );
+
             break;
         }
 
@@ -248,30 +260,34 @@ const char *GetStateString( int State )
 
 static const string ReplyString[] =
 {
-    "eREPLY_CHECK_ALIVE"
-    "eREPLY_CONNECT",
-    "eREPLY_REQUEST_DATA",
-    "eREPLY_RESPONSE",
+    "REPLY_CHECK_ALIVE",
+    "REPLY_CONNECT",
+    "REPLY_REQUEST_DATA",
+    "REPLY_RESPONSE"
 };
 
-const char *GetReplyType( int Type )
+const char *GetReplyType( char Type )
 {
     return ReplyString[Type].c_str();
 }
 
-void ServerContext::ReplyClient( ProtocolTypeReply Type, bool IsSucess )
+void ServerContext::ReplyClient( char Type, bool IsSucess )
 {
     P_Reply Reply;
     memset( &Reply, 0, sizeof(P_Reply) );
     Reply.TypeReply = Type;
     Reply.IsSucess = IsSucess;
 
-    this->Send( PROTOCOL_S_REPLY, (char *)&Reply );
+    int Ret = this->Send(PROTOCOL_S_REPLY, (char *)&Reply);
+    if (Ret != eERR_NONE )
+    {
+        return;
+    }
 
     this->ShowReplyMsg( false, Type, IsSucess);
 }
 
-void ServerContext::ShowReplyMsg( bool isGet, ProtocolTypeReply Type, bool IsSucess)
+void ServerContext::ShowReplyMsg( bool isGet, char Type, bool IsSucess)
 {
     if(isGet)
         printf("[ Reply From ] Client:%d Type:%s IsSucess:%d\n", m_Client, GetReplyType(Type), IsSucess);
@@ -404,7 +420,7 @@ bool ServerContext::SetClientRequest(P_C_Request *Data)
 
 void ServerContext::ResponseClientData()
 {
-    //向社群網站請求資料;//
+    //向社群網站請求資料;//    
     string Data = m_pSM->Request(m_ID, m_Field);
 
     P_S_Response Response;
@@ -469,7 +485,7 @@ int StateConnect::Receive(char Protocol, char *Data)
     if (Protocol != PROTOCOL_C_CONNECT)
     {
         //回應Clinet端連線資訊錯誤;//
-        m_Contex->ReplyClient(eREPLY_CONNECT, false);
+        m_Contex->ReplyClient(REPLY_CONNECT, false);
         return eERR_PROTOCOL;
     }
 
@@ -477,13 +493,13 @@ int StateConnect::Receive(char Protocol, char *Data)
 
     if (!m_Contex->SetClientRequest(Request))
     {
-        m_Contex->ReplyClient(eREPLY_CONNECT, false);
+        m_Contex->ReplyClient(REPLY_CONNECT, false);
         return eERR_CLIENT_CONNECT_TYPE;
     }
     
     m_Contex->SetState(ServerContext::eSTATE_RESPONSE);
 
-    m_Contex->ReplyClient(eREPLY_CONNECT, true);
+    m_Contex->ReplyClient(REPLY_CONNECT, true);
 
     return eERR_NONE;
 }
@@ -527,11 +543,11 @@ int StateResponse::Receive(char Protocol, char *Data)
 
             if (!m_Contex->SetClientRequest(&Request))
             {
-                m_Contex->ReplyClient(eREPLY_CONNECT, false);
+                m_Contex->ReplyClient(REPLY_CONNECT, false);
                 return eERR_CLIENT_CONNECT_TYPE;
             }
 
-            m_Contex->ReplyClient(eREPLY_CONNECT, true);
+            m_Contex->ReplyClient(REPLY_CONNECT, true);
         }
             break;
         
@@ -542,16 +558,16 @@ int StateResponse::Receive(char Protocol, char *Data)
             memcpy(&Reply, Data, sizeof(P_Reply));
 
             //顯示訊息;//
-            m_Contex->ShowReplyMsg( true, (ProtocolTypeReply)Reply.TypeReply, Reply.IsSucess);
+            m_Contex->ShowReplyMsg( true, Reply.TypeReply, Reply.IsSucess);
 
             //表示有資料請求,回覆對應的社群網站資料;//
-            if (Reply.TypeReply == eREPLY_REQUEST_DATA
+            if (Reply.TypeReply == REPLY_REQUEST_DATA
                 && Reply.IsSucess)
             {
                 //傳送請求資料給Client;//
                 m_Contex->ResponseClientData();
             }
-            else if(Reply.TypeReply == eREPLY_RESPONSE)
+            else if(Reply.TypeReply == REPLY_RESPONSE)
             {
                 //表示收到資料解析成功;//
                 //目前不做任何動作;//
@@ -584,4 +600,3 @@ int StateError::Receive(char Protocol, char *Data)
 {
     return eERR_NONE;
 }
-

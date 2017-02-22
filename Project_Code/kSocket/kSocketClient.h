@@ -7,16 +7,16 @@
 //#define PRINT_LOG
 
 /////////////////////////////////////////////////////////////////////////////
-// kClient                                                                     
+// kTcpClient                                                                     
 /////////////////////////////////////////////////////////////////////////////
-class kClient : public kSocket
+class kTcpClient : public kSocket
 {
 public:
-    kClient();
-    ~kClient();
+    kTcpClient();
+    ~kTcpClient();
 
     int  Create( SocketInfo Info );
-    int  Send( char *Data, int DataLen );
+    int  Send( SOCKET TargetSocket, char *Data, int DataLen );
     int  Receive( char *ReData, int &ReDataLen );
     int  Select();
 

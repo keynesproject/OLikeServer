@@ -1,9 +1,9 @@
 #include "kSocketClient.h"
 
 /////////////////////////////////////////////////////////////////////////////
-// kClient                                                                     
+// kTcpClient                                                                     
 /////////////////////////////////////////////////////////////////////////////
-kClient::kClient()
+kTcpClient::kTcpClient()
 : m_Client(0)
 { 
     memset( &m_ServerAddr, 0, sizeof(sockaddr_in) );
@@ -15,12 +15,12 @@ kClient::kClient()
     m_HandShakeTime = GetTickCount();
 }
 
-kClient::~kClient()
+kTcpClient::~kTcpClient()
 {
     this->SetActive( false );
 }
 
-int kClient::Create( SocketInfo Info )
+int kTcpClient::Create( SocketInfo Info )
 {
     //設定Server端資訊;//
     m_ServerAddr.sin_family = AF_INET;                       //設定Server連線樣式;//
@@ -35,20 +35,20 @@ int kClient::Create( SocketInfo Info )
     return eERR_NONE;
 }
 
-int kClient::Send( char *Data, int DataLen )
+int kTcpClient::Send( SOCKET TargetSocket, char *Data, int DataLen )
 {
     //傳送資訊;//
 #ifdef PRINT_LOG
     printf( "[ Send ] ClientFD[%d] Send:%s \n", m_Client, Data );
 #endif
 
-    if( send( m_Client, Data, DataLen, 0 ) < 0 )
+    if( send(TargetSocket, Data, DataLen, 0 ) < 0 )
         return eERR_CLIENT_SEND;
 
     return eERR_NONE;
 }
 
-int kClient::Receive( char *ReData, int &ReDataLen )
+int kTcpClient::Receive( char *ReData, int &ReDataLen )
 {
     //這邊需要修改，因為資料有收到時會存到LIST下面，所以必須持續接收到LIST為0時才算沒有資料;//
 
@@ -65,7 +65,7 @@ int kClient::Receive( char *ReData, int &ReDataLen )
     return eERR_NONE;
 }
 
-int kClient::Select()
+int kTcpClient::Select()
 {
     if( m_isCloseThread == true )
     {
@@ -148,7 +148,7 @@ int kClient::Select()
     return eERR_NONE;
 }
 
-int kClient::Active()
+int kTcpClient::Active()
 {
     if( m_Client != 0 )
         CloseAll();
@@ -185,7 +185,7 @@ int kClient::Active()
     return eERR_NONE;
 }
 
-void kClient::CloseAll()
+void kTcpClient::CloseAll()
 {
     if( m_Client != 0 )
     {
@@ -198,7 +198,7 @@ void kClient::CloseAll()
     }
 }
 
-void kClient::TimeToSendHandShake()
+void kTcpClient::TimeToSendHandShake()
 {
     //計時倒數;//
     unsigned long EndTime = GetTickCount();
@@ -207,6 +207,6 @@ void kClient::TimeToSendHandShake()
     {
         m_HandShakeTime = EndTime;
         // 加入要執行的函式
-        this->Send( (char*)KSOCKET_HANDSHAKE_CODE, strlen(KSOCKET_HANDSHAKE_CODE) );
+        this->Send(m_Client, (char*)KSOCKET_HANDSHAKE_CODE, strlen(KSOCKET_HANDSHAKE_CODE) );
     }
 }

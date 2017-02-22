@@ -68,14 +68,23 @@ kSocket *kSocketFactory::CreateSocket( SocketInfo Info )
 #endif
 
     kSocket *NewSocket = NULL;
-    if( Info.Type == eTYPE_SERVER )
+    if( Info.Type == eTYPE_TCP_SERVER )
     {
-        NewSocket = new kServer();
+        NewSocket = new kTcpServer();
+    }
+    else if( Info.Type == eTYPE_TCP_CLIENT)
+    {
+        NewSocket = new kTcpClient();
+    }
+    else if (Info.Type == eTYPE_UDP_SERVER)
+    {
+        NewSocket = new kUdpServer();
     }
     else
     {
-        NewSocket = new kClient();
-    }
+        printf("Socket Type Error : %d\n", Info.Type);
+        return NULL;
+    }    
 
     int Error = NewSocket->Create( Info );
     if( Error != 0 )
@@ -118,7 +127,7 @@ kSocket::kSocket()
 
 kSocket::~kSocket()
 {
-
+    SetActive(false);
 }
 
 bool kSocket::CheckHandShake( char *Data, int DataSize )
@@ -213,7 +222,9 @@ bool kSocket::SetNonBlocking( SOCKET &Socket )
     unsigned long mode = 1;
     ioctlsocket( Socket, FIONBIO, &mode);
 #else
-    if( fcntl( Socket, F_SETFL, O_NONBLOCK ) < 0 )
+    SaveFileFlags = fcntl(Socket, F_GETFL);
+    SaveFileFlags |= O_NONBLOCK;
+    if( fcntl( Socket, F_SETFL, SaveFileFlags) == -1)
         return false;
 #endif
 
