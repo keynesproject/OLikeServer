@@ -548,7 +548,15 @@ ClientInfo* kUdpServer::CheckClient(sockaddr_in Addr)
     for (size_t i = 0; i < m_Clients.size(); i++)
     {
         if (memcmp(&Addr, &m_Clients[i].Addr, sizeof(sockaddr_in)) == 0)
+        {
+            //紀錄連線時間,用以計算是否連線逾時要判斷為斷線使用;//
+#ifdef WIN32
+            m_Clients[i].TimeOut = GetTickCount();
+#else
+            gettimeofday(&m_Clients[i].TimeOut, NULL);
+#endif            
             return &m_Clients[i];
+        }
     }
 
     //建立一個唯一的Socket編號;//
@@ -589,7 +597,7 @@ ClientInfo* kUdpServer::CheckClient(sockaddr_in Addr)
         NewClient.Addr.sin_addr.S_un.S_un_b.s_b3,
         NewClient.Addr.sin_addr.S_un.S_un_b.s_b4);
 #else
-    sprintf(IP, "%s", inet_ntoa(Client.Addr.sin_addr));
+    sprintf(IP, "%s", inet_ntoa(NewClient.Addr.sin_addr));
 #endif
 
     //訊息;//
@@ -607,6 +615,12 @@ ClientInfo* kUdpServer::CheckClient(sockaddr_in Addr)
     if (m_ConnectCallbackFunc != NULL)
         m_ConnectCallbackFunc(m_ConnectWorkingClass, NewClient.Socket, true, IP);
     
+    //紀錄連線時間,用以計算是否連線逾時要判斷為斷線使用;//
+#ifdef WIN32
+    m_Clients[m_Clients.size() - 1].TimeOut = GetTickCount();
+#else
+    gettimeofday(&m_Clients[m_Clients.size() - 1].TimeOut, NULL);
+#endif
     return &m_Clients[m_Clients.size() - 1];
 }
 
@@ -620,9 +634,11 @@ void kUdpServer::CheckDisconnectClient()
         unsigned long NowTime = GetTickCount();
         if (NowTime - it->TimeOut > 200000)
 #else
-        timeval NowTime;
+        timeval NowTime, Result;
         gettimeofday(&NowTime, NULL);
-        if (NowTime.tv_sec - it->TimeOut.tv_sec >= 20)
+        timersub(&NowTime, &it->TimeOut, &Result);
+        if(Result.tv_sec>=20)
+        //if (NowTime.tv_sec - it->TimeOut.tv_sec >= 20)
 #endif
         {
             //過20秒沒有傳輸過資料,把此Client視為斷線;//
