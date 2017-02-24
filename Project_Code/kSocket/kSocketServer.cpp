@@ -417,72 +417,82 @@ int kUdpServer::Select()
     FD_ZERO(&m_ReadFds);
     FD_SET(m_SocketServer, &m_ReadFds);
 
-    switch (select(m_SocketServer + 1, &m_ReadFds, NULL, NULL, &m_SelectTime))
+    int Ret = select(m_SocketServer + 1, &m_ReadFds, NULL, NULL, &m_SelectTime);
+
+    //Select錯誤,退出程序;//
+    if (Ret == -1)
     {
-        //Select錯誤,退出程序;//
-    case -1:
-        exit(-1);
-        break;
+        printf("[ Error ] Select error!\n");
+        return eERR_SERVER_SELECT;
+    }
 
-        //Select愈時,再次輪巡;//
-    case 0:
-        break;
+    //Select愈時,再次輪巡;//
+    if (Ret == 0)
+    {
+        //printf("[ Select ] Continute! \n");
+        CheckDisconnectClient();
 
-    default:
-        if (FD_ISSET(m_SocketServer, &m_ReadFds))
-        {
+        return eERR_NONE;
+    }
+
+    //表示Server有連線或資料傳輸的請求通知;//
+    if (FD_ISSET(m_SocketServer, &m_ReadFds))
+    {
 #ifdef WIN32
-            unsigned long ReceiveDataSize;
-            if (ioctlsocket(m_SocketServer, FIONREAD, &ReceiveDataSize) == SOCKET_ERROR)
-                return eERR_SERVER_RECEIVE;
+        unsigned long ReceiveDataSize;
+        if (ioctlsocket(m_SocketServer, FIONREAD, &ReceiveDataSize) == SOCKET_ERROR)
+            return eERR_SERVER_RECEIVE;
 #else
-            int ReceiveDataSize;
-            if (ioctl(m_SocketServer, FIONREAD, &ReceiveDataSize) < 0)
-                return eERR_SERVER_RECEIVE;
+        int ReceiveDataSize;
+        if (ioctl(m_SocketServer, FIONREAD, &ReceiveDataSize) < 0)
+            return eERR_SERVER_RECEIVE;
 #endif
-            //收到Size為0的話,表示Client中斷連線;//
-            if (ReceiveDataSize == 0)
+        //收到Size為0的話,表示Client中斷連線;//
+        if (ReceiveDataSize == 0)
+        {
+            //int a = 5;
+        }
+        else
+        {
+            char *Buffer = new char[ReceiveDataSize];
+            memset(Buffer, 0, ReceiveDataSize);
+
+            //接收數據;//
+            sockaddr_in NewClient;
+            socklen_t  ClientLen = sizeof(NewClient);
+            int Ret = recvfrom(m_SocketServer, Buffer, ReceiveDataSize, 0, (struct sockaddr *)&NewClient, &ClientLen);
+            if (Ret < 0)
             {
-                int a = 5;
+                fprintf(stderr, "[ Recvfrom failed ] error no %d\n ", errno);
+                perror("recvform call failed");
+                //exit(errno);
+            }
+
+            //檢查Client是否需要新增連線資訊;//
+            ClientInfo *ConnectClient = CheckClient(NewClient);
+
+            //查看是否為交握訊息;//
+            if (CheckHandShake(Buffer, ReceiveDataSize) == true)
+            {
+                int ShakeLen = strlen(KSOCKET_HANDSHAKE_CODE);
+                if ((ReceiveDataSize - ShakeLen) > 0)
+                {
+                    if (m_RecvCallbackFunc != NULL)
+                        m_RecvCallbackFunc(m_CallbackSocket, ConnectClient->Socket, Buffer + ShakeLen, ReceiveDataSize - ShakeLen);
+                }
             }
             else
             {
-                char *Buffer = new char[ReceiveDataSize];
-                memset(Buffer, 0, ReceiveDataSize);
-
-                //接收數據;//
-                sockaddr_in NewClient;
-                int ClientLen = sizeof(NewClient);
-                int Ret = recvfrom(m_SocketServer, Buffer, ReceiveDataSize, 0, (struct sockaddr *)&NewClient, &ClientLen);
-                if ( Ret<0 )
-                {
-                    fprintf(stderr, "[ Recvfrom failed ] error no %d\n ", errno);
-                    perror("recvform call failed");
-                    //exit(errno);
-                }
-
-                //檢查Client是否需要新增連線資訊;//
-                ClientInfo *ConnectClient = CheckClient(NewClient);
-                                
-                //查看是否為交握訊息;//
-                if (CheckHandShake(Buffer, ReceiveDataSize) == true)
-                {
-                    int ShakeLen = strlen(KSOCKET_HANDSHAKE_CODE);
-                    if ((ReceiveDataSize - ShakeLen) > 0)
-                    {
-                        if (m_RecvCallbackFunc != NULL)
-                            m_RecvCallbackFunc(m_CallbackSocket, ConnectClient->Socket, Buffer + ShakeLen, ReceiveDataSize - ShakeLen);
-                    }
-                }
-                else
-                {
-                    if (m_RecvCallbackFunc != NULL)
-                        m_RecvCallbackFunc(m_CallbackSocket, ConnectClient->Socket, Buffer, ReceiveDataSize);
-                }
-                delete[] Buffer;
-                Buffer = NULL;
+                if (m_RecvCallbackFunc != NULL)
+                    m_RecvCallbackFunc(m_CallbackSocket, ConnectClient->Socket, Buffer, ReceiveDataSize);
             }
+            delete[] Buffer;
+            Buffer = NULL;
         }
+    }
+    else
+    {
+        CheckDisconnectClient();
     }
 
     return eERR_NONE;
@@ -568,7 +578,7 @@ ClientInfo* kUdpServer::CheckClient(sockaddr_in Addr)
 #ifdef WIN32
     NewClient.TimeOut = GetTickCount();
 #else
-    gettimeofday(&Client.TimeOut, NULL);
+    gettimeofday(&NewClient.TimeOut, NULL);
 #endif
     
     char IP[17];
@@ -596,7 +606,44 @@ ClientInfo* kUdpServer::CheckClient(sockaddr_in Addr)
     //通知上層有Client連結;//
     if (m_ConnectCallbackFunc != NULL)
         m_ConnectCallbackFunc(m_ConnectWorkingClass, NewClient.Socket, true, IP);
-
-
+    
     return &m_Clients[m_Clients.size() - 1];
+}
+
+void kUdpServer::CheckDisconnectClient()
+{
+    //判斷Client Socket是否過久沒傳輸訊息,要移除連線;//
+    std::vector< ClientInfo >::iterator it = m_Clients.begin();
+    for (; it != m_Clients.end(); )
+    {
+#ifdef WIN32
+        unsigned long NowTime = GetTickCount();
+        if (NowTime - it->TimeOut > 200000)
+#else
+        timeval NowTime;
+        gettimeofday(&NowTime, NULL);
+        if (NowTime.tv_sec - it->TimeOut.tv_sec >= 20)
+#endif
+        {
+            //過20秒沒有傳輸過資料,把此Client視為斷線;//
+            RemoveClient(it->Socket);
+
+            it = m_Clients.erase(it);
+        }
+        else
+        {
+            it++;
+        }
+    }
+}
+
+void kUdpServer::RemoveClient(SOCKET Clinet)
+{
+    printf("\n");
+    printf("[! Removing Udp !] \n");
+    printf("  Remove udp client on socket fd %d \n", Clinet);
+    printf("  Total Clients : %d \n", (int)m_Clients.size() - 1);
+
+    if (m_ConnectCallbackFunc != NULL)
+        m_ConnectCallbackFunc(m_ConnectWorkingClass, Clinet, false, NULL);
 }

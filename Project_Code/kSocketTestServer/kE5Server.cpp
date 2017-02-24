@@ -268,7 +268,7 @@ static const string ReplyString[] =
 
 const char *GetReplyType( char Type )
 {
-    return ReplyString[Type].c_str();
+    return ReplyString[(int)Type].c_str();
 }
 
 void ServerContext::ReplyClient( char Type, bool IsSucess )

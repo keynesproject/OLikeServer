@@ -222,7 +222,7 @@ bool kSocket::SetNonBlocking( SOCKET &Socket )
     unsigned long mode = 1;
     ioctlsocket( Socket, FIONBIO, &mode);
 #else
-    SaveFileFlags = fcntl(Socket, F_GETFL);
+    int SaveFileFlags = fcntl(Socket, F_GETFL);
     SaveFileFlags |= O_NONBLOCK;
     if( fcntl( Socket, F_SETFL, SaveFileFlags) == -1)
         return false;

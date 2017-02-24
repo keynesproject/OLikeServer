@@ -85,6 +85,10 @@ private:
 
     ClientInfo* CheckClient(sockaddr_in Addr);
 
+    void CheckDisconnectClient();
+
+    void RemoveClient(SOCKET Clinet);
+
 private:
     //使用非阻塞Select方式監測的Socket集合;//
     fd_set      m_ReadFds;
