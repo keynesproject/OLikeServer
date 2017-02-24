@@ -43,41 +43,41 @@ CC       = gcc
 CFLAGS   = -g -Wall -ansi -pedantic #-O2
 
 CXX      = g++
-CXXFLAGS = -g -std=c++0x -Wall #-O2
+CXXFLAGS = -g -std=c++11 -Wall #-O2
 
 ############################ command
 all: $(PROSERVER_OUT_DIR) $(PRO_TARGET_CLIENT) $(PRO_TARGET_SERVER)
 
 #$(PRO_TARGET_CLIENT): $(CLIENT_OBJS)
-#       @echo -e "\033[036mCompiling $@\033[0m"
-#       $(CXX) -o $(PROCLIENT_OUT_DIR)/$@ $(CXXFLAGS) $(CLIENT_OBJS) $(LIBS) $(LIBPATH)
+#	@echo -e "\033[036mCompiling $@\033[0m"
+#	$(CXX) -o $(PROCLIENT_OUT_DIR)/$@ $(CXXFLAGS) $(CLIENT_OBJS) $(LIBS) $(LIBPATH)
 
 $(PRO_TARGET_SERVER): $(SERVER_OBJS)
-        @echo -e "\033[036mCompiling $@\033[0m"
-        $(CXX) -o $(PROSERVER_OUT_DIR)/$@  $(CXXFLAGS) $(SERVER_OBJS) $(LIBS) $(LIBPATH)
+	@echo -e "\033[036mCompiling $@\033[0m"
+	$(CXX) -o $(PROSERVER_OUT_DIR)/$@  $(CXXFLAGS) $(SERVER_OBJS) $(LIBS) $(LIBPATH)
 
 $(PROSERVER_OUT_DIR):
-        mkdir -p $(PROSERVER_OUT_DIR)
+	mkdir -p $(PROSERVER_OUT_DIR)
         
 %.o : %.cpp
-        @echo -e "\033[036mCompiling CXX $@\033[0m"
-        $(CXX) -c $(CXXFLAGS) $(INCPATH) -o $@ $<
+	@echo -e "\033[036mCompiling CXX $@\033[0m"
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o $@ $<
 
 %.o : %.c
-        @echo -e "\033[036mCompiling CC $@\033[0m"
-        $(CC) -c $(CFLAGS) $(INCPATH) -o $@ $<
+	@echo -e "\033[036mCompiling CC $@\033[0m"
+	$(CC) -c $(CFLAGS) $(INCPATH) -o $@ $<
 
 %.o : %.s
-        @echo -e "\033[036mCompiling ASM $@\033[0m"
-        $(ASM) $(ASMFLAGS) $< 
+	@echo -e "\033[036mCompiling ASM $@\033[0m"
+	$(ASM) $(ASMFLAGS) $< 
 
 depend:
-        g++ -E -MM $(CODEPATH)*.cpp $(CFLAGS) $(INCPATH) > .depend
+	g++ -E -MM $(CODEPATH)*.cpp $(CFLAGS) $(INCPATH) > .depend
 
 clean:
-        rm -rf $(PROSERVER_CODE)/*.o
-        rm -rf $(PROSERVER_OUT_DIR)/$(PRO_TARGET_SERVER)
-#       rm -rf $(PROCLIENT_CODE)/*.o
-#       rm -rf $(PROCLIENT_OUT_DIR)/$(PRO_TARGET_CLIENT)
-        rm -rf $(OBJS)     
+	rm -rf $(PROSERVER_CODE)/*.o
+	rm -rf $(PROSERVER_OUT_DIR)/$(PRO_TARGET_SERVER)
+#	rm -rf $(PROCLIENT_CODE)/*.o
+#	rm -rf $(PROCLIENT_OUT_DIR)/$(PRO_TARGET_CLIENT)
+	rm -rf $(OBJS)     
 
